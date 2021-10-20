@@ -1,0 +1,6 @@
+[package]
+name = "plonk"
+description = "An experimental arkworks-based PLONK/PLOOKUP implementation"
+license = "MIT/Apache-2.0"
+version = "0.0.1"
+edition = "2018"
