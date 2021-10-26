@@ -6,7 +6,8 @@ use crate::{Error, Field};
 use super::{Composer, Variable};
 
 impl<F: Field> Composer<F> {
-    /// num_bits has to be even
+    /// here we enforce range constraint by quads (2-bit unit), so `num_bits` must be even.
+    /// The quads are orgnized in the big-endian order
     pub fn enforce_range(&mut self, var: Variable, num_bits: usize) -> Result<usize, Error> {
         assert!(!self.is_finalized);
         assert!(self.program_width >= 4);
@@ -158,14 +159,6 @@ mod tests {
         assert_eq!(cs.wires["w_1"], vec![Variable(0), Variable(5), Variable(0)]);
         assert_eq!(cs.wires["w_2"], vec![Variable(2), Variable(6), Variable(0)]);
         assert_eq!(cs.wires["w_3"], vec![Variable(3), Variable(7), Variable(0)]);
-
-        for j in 0..4 {
-            let label = format!("w_{}", j);
-            print!("\n{}:", label);
-            for w in cs.wires[&label].iter() {
-                print!("\n{}", cs.assignments[w.0])
-            }
-        }
 
         Ok(())
     }
