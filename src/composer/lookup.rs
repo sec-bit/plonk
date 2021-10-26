@@ -100,7 +100,7 @@ impl<F: Field> Composer<F> {
                 sorted_values[col].extend(lookups.iter().map(|&i| table.columns[col][i]));
             }
             for col in table.width..sorted_values.len() {
-                sorted_values[col].extend(vec![F::zero(); table.size]);
+                sorted_values[col].extend(vec![F::zero(); lookups.len()]);
             }
         }
 

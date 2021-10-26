@@ -206,7 +206,7 @@ impl<F: Field, D: Domain<F>> Widget<F, D> for PermutationWidget<F, D> {
 mod tests {
 
     use ark_bn254::Fr;
-    use ark_ff::{One, Zero};
+    use ark_ff::Zero;
     use ark_poly::{univariate::DensePolynomial, EvaluationDomain, UVPolynomial};
     use ark_std::{cfg_iter_mut, test_rng, UniformRand};
 
@@ -290,7 +290,8 @@ mod tests {
         print!("compute quotient...");
         prover.add_challenge("alpha", Fr::rand(rng));
         let mut quotient = vec![Fr::zero(); prover.coset_size()];
-        widget.compute_quotient_contribution(&mut prover, &mut Fr::one(), &mut quotient)?;
+        let mut combinator = prover.get_challenge("alpha")?;
+        widget.compute_quotient_contribution(&mut prover, &mut combinator, &mut quotient)?;
         let vi = prover.get_coset_values("vi")?;
         cfg_iter_mut!(quotient)
             .zip(vi.iter())
@@ -303,7 +304,8 @@ mod tests {
         let zeta = Fr::rand(rng);
         prover.add_challenge("zeta", zeta);
         prover.add_challenge("zeta_omega", zeta * prover.domain.generator());
-        let (r, complement) = widget.compute_linear_contribution(&mut prover, &mut Fr::one())?;
+        let mut combinator = prover.get_challenge("alpha")?;
+        let (r, complement) = widget.compute_linear_contribution(&mut prover, &mut combinator)?;
         println!("done");
 
         print!("check equality...");

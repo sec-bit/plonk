@@ -90,23 +90,13 @@ impl<F: Field, D: Domain<F>> Widget<F, D> for ArithmeticWidget<F, D> {
             terms.push((q_arith_zeta * w_zeta, q));
         }
 
-        let alpha = prover.get_challenge("alpha")?;
         let lc = LinearCombination::new("arithmetic", terms);
 
+        let alpha = prover.get_challenge("alpha")?;
         *combinator *= alpha;
 
         Ok((lc, F::zero()))
     }
-}
-
-#[inline]
-fn term<F: Field, D: Domain<F>>(
-    prover: &mut Prover<F, D>,
-    index: usize,
-    q_arith_zeta: F,
-) -> Result<(F, String), Error> {
-    let w_zeta = prover.evaluate(&format!("w_{}", index), "zeta")?;
-    Ok((q_arith_zeta * w_zeta, format!("q_{}", index)))
 }
 
 #[cfg(test)]
@@ -153,6 +143,7 @@ mod tests {
         print!("compute quotient...");
         prover.add_challenge("alpha", Fr::rand(rng));
         let mut quotient = vec![Fr::zero(); prover.coset_size()];
+        // the combinator for arithmetic widget has to be one, due to the presence of the public input.
         widget.compute_quotient_contribution(&mut prover, &mut Fr::one(), &mut quotient)?;
         let p = DensePolynomial::from_coefficients_vec(prover.coset.coset_ifft(&quotient));
         let (_, remainder) = p.divide_by_vanishing_poly(prover.domain).unwrap();

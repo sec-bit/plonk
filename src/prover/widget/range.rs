@@ -20,7 +20,7 @@ impl<F: Field, D: Domain<F>> RangeWidget<F, D> {
     const SELECTOR_LABELS: [&'static str; 1] = ["q_range"];
 
     pub fn new(program_width: usize) -> Self {
-        assert!(program_width >= 2);
+        assert!(program_width >= 4);
         Self {
             program_width,
             wire_labels: (0..program_width)
@@ -72,7 +72,7 @@ impl<F: Field, D: Domain<F>> Widget<F, D> for RangeWidget<F, D> {
                 values[&self.wire_labels[0]][next_i],
             ));
 
-            quotient[i] += values["q_range"][i] * combine(eta, quads);
+            quotient[i] += *combinator * values["q_range"][i] * combine(eta, quads);
         });
 
         *combinator *= alpha;
@@ -105,7 +105,10 @@ impl<F: Field, D: Domain<F>> Widget<F, D> for RangeWidget<F, D> {
             quads
         };
 
-        let lc = LinearCombination::new("range", vec![(combine(eta, quads), "q_range")]);
+        let lc = LinearCombination::new(
+            "range",
+            vec![(*combinator * combine(eta, quads), "q_range")],
+        );
 
         *combinator *= alpha;
 
@@ -135,7 +138,7 @@ fn combine<F: Field>(challenge: F, mut values: Vec<F>) -> F {
 mod tests {
 
     use ark_bn254::Fr;
-    use ark_ff::{One, Zero};
+    use ark_ff::Zero;
     use ark_poly::{univariate::DensePolynomial, EvaluationDomain, UVPolynomial};
     use ark_std::{cfg_iter_mut, test_rng, UniformRand};
 
@@ -195,7 +198,7 @@ mod tests {
         print!("compute quotient...");
         prover.add_challenge("alpha", Fr::rand(rng));
         let mut quotient = vec![Fr::zero(); prover.coset_size()];
-        let mut combinator = Fr::one();
+        let mut combinator = prover.get_challenge("alpha")?;
         widget.compute_quotient_contribution(&mut prover, &mut combinator, &mut quotient)?;
         let vi = prover.get_coset_values("vi")?;
         cfg_iter_mut!(quotient)
@@ -207,7 +210,7 @@ mod tests {
 
         print!("compute linearization...");
         let zeta = Fr::rand(rng);
-        let mut combinator = Fr::one();
+        let mut combinator = prover.get_challenge("alpha")?;
         prover.add_challenge("zeta", zeta);
         prover.add_challenge("zeta_omega", zeta * prover.domain.generator());
         let (r, complement) = widget.compute_linear_contribution(&mut prover, &mut combinator)?;
