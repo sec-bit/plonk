@@ -9,13 +9,14 @@ pub(crate) struct Key<F: Field>(Vec<F>);
 
 #[derive(Debug, Default)]
 pub struct Table<F: Field> {
-    pub id: String,
-    pub size: usize,
-    pub width: usize,
-    pub key_width: usize,
+    id: String,
+    index: usize,
+    size: usize,
+    width: usize,
+    key_width: usize,
 
-    pub columns: Vec<Vec<F>>,
-    pub lookups: Vec<usize>,
+    columns: Vec<Vec<F>>,
+    lookups: Vec<usize>,
 
     key_map: Map<Vec<F>, usize>,
 }
@@ -34,6 +35,14 @@ impl<F: Field> Table<F> {
                 Ok(values)
             }
         }
+    }
+
+    fn table_index(&self) -> usize {
+        self.index
+    }
+
+    fn set_table_index(&mut self, index: usize) {
+        self.index = index;
     }
 }
 
@@ -62,6 +71,7 @@ impl<F: Field> Table<F> {
 
         Self {
             id: "xor".to_string(),
+            index: 0,
             size,
             width,
             key_width,
@@ -75,23 +85,26 @@ impl<F: Field> Table<F> {
 
 impl<F: Field> Composer<F> {
     pub(super) fn compute_table_values(&self) -> Vec<Vec<F>> {
-        let mut table_values = vec![Vec::with_capacity(self.table_size()); self.program_width];
-        for table in self.tables.iter() {
+        // one column
+        let mut table_values = vec![Vec::with_capacity(self.table_size()); self.program_width + 1];
+        for (i, table) in self.tables.iter().enumerate() {
             for col in 0..table.width {
                 table_values[col].extend(table.columns[col].iter());
             }
-            for col in table.width..table_values.len() {
+            for col in table.width..(self.program_width) {
                 table_values[col].extend(vec![F::zero(); table.size]);
             }
+            table_values[self.program_width].extend(vec![F::from((i + 1) as u64); table.size])
         }
 
         table_values
     }
 
     pub(super) fn compute_sorted_values(&self) -> Vec<Vec<F>> {
-        let mut sorted_values = vec![Vec::with_capacity(self.sorted_size()); self.program_width];
+        let mut sorted_values =
+            vec![Vec::with_capacity(self.sorted_size()); self.program_width + 1];
 
-        for table in self.tables.iter() {
+        for (i, table) in self.tables.iter().enumerate() {
             let mut lookups: Vec<_> = (0..table.size).collect();
             lookups.extend(&table.lookups);
             lookups.sort();
@@ -99,9 +112,10 @@ impl<F: Field> Composer<F> {
             for col in 0..table.width {
                 sorted_values[col].extend(lookups.iter().map(|&i| table.columns[col][i]));
             }
-            for col in table.width..sorted_values.len() {
+            for col in table.width..self.program_width {
                 sorted_values[col].extend(vec![F::zero(); lookups.len()]);
             }
+            sorted_values[self.program_width].extend(vec![F::from((i + 1) as u64); lookups.len()])
         }
 
         sorted_values
@@ -128,8 +142,9 @@ impl<F: Field> Composer<F> {
 
 impl<F: Field> Composer<F> {
     /// table index starts at 1
-    pub fn add_table(&mut self, table: Table<F>) -> usize {
+    pub fn add_table(&mut self, mut table: Table<F>) -> usize {
         let index = self.tables.len() + 1;
+        table.set_table_index(index);
         for t in self.tables.iter() {
             assert_ne!(&t.id, &table.id);
         }
@@ -165,7 +180,7 @@ impl<F: Field> Composer<F> {
         let index = self.insert_gate(wires);
 
         self.selectors.get_mut("q_lookup").unwrap()[index] = F::one();
-        self.selectors.get_mut("q_table").unwrap()[index] = F::from(index as u64);
+        self.selectors.get_mut("q_table").unwrap()[index] = F::from(table_index as u64);
 
         Ok(value)
     }
@@ -174,10 +189,12 @@ impl<F: Field> Composer<F> {
 #[cfg(test)]
 pub mod tests {
     use ark_bn254::Fr;
+    use ark_ff::{One, Zero};
 
     use super::*;
 
-    pub fn composer_lookup() -> Result<(), Error> {
+    #[test]
+    fn composer_lookup() -> Result<(), Error> {
         let mut cs = Composer::new(4);
         let table_index = cs.add_table(Table::xor_table(2));
         let x = cs.alloc(Fr::from(1));
@@ -185,6 +202,27 @@ pub mod tests {
         let z = cs.read_from_table(table_index, vec![x, y])?;
         cs.enforce_constant(z[0], Fr::from(3));
         cs.finalize();
+
+        assert_eq!(cs.size(), 2);
+        assert_eq!(cs.selectors["q_range"], vec![Fr::zero(), Fr::zero()]);
+        assert_eq!(cs.selectors["q_arith"], vec![Fr::zero(), Fr::one()]);
+        assert_eq!(cs.selectors["q_lookup"], vec![Fr::one(), Fr::zero()]);
+        assert_eq!(cs.selectors["q_table"], vec![Fr::one(), Fr::zero()]);
+        assert_eq!(cs.selectors["q_m"], vec![Fr::zero(), Fr::zero()]);
+        assert_eq!(cs.selectors["q_c"], vec![Fr::zero(), -Fr::from(3)]);
+        assert_eq!(cs.selectors["q_0"], vec![Fr::zero(), Fr::one()]);
+        assert_eq!(cs.selectors["q_1"], vec![Fr::zero(), Fr::zero()]);
+        assert_eq!(cs.selectors["q_2"], vec![Fr::zero(), Fr::zero()]);
+        assert_eq!(cs.selectors["q_3"], vec![Fr::zero(), Fr::zero()]);
+
+        assert_eq!(cs.wires["w_0"], vec![Variable(1), Variable(3)]);
+        assert_eq!(cs.wires["w_1"], vec![Variable(2), Variable(0)]);
+        assert_eq!(cs.wires["w_2"], vec![Variable(3), Variable(0)]);
+        assert_eq!(cs.wires["w_3"], vec![Variable(0), Variable(0)]);
+
+        for (i, v) in cs.assignments.iter().enumerate() {
+            println!("{}: {}", i, v);
+        }
 
         Ok(())
     }
