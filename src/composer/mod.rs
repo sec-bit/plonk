@@ -154,6 +154,7 @@ impl<F: Field> Composer<F> {
             prover_key.insert(&format!("sigma_{}", col), sigma.clone());
         }
 
+        // the last column for table indices
         let table_values = self.compute_table_values();
         for (col, table_value) in table_values.iter().enumerate() {
             prover_key.insert(&format!("table_{}", col), table_value.clone());
